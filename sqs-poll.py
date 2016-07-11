@@ -4,9 +4,12 @@ import time
 import json
 import sys
 import logging
+import logging.handlers
 
-log = logging.RotatingFileHandler("/tmp/poller.log", "a", 1024*1024, 5)
+log = logging.getLogger('poller')
 log.setLevel(logging.INFO)
+handler = logging.handlers.RotatingFileHandler("/tmp/poller.log", maxBytes=1024*1024, backupCount=5)
+log.addHandler(handler)
 
 def get_sqs_url(region, account_id, stage):
   return 'https://sqs.{0}.amazonaws.com/{1}/{2}_deferred_execution_main_queue'.format(region, account_id, stage)
@@ -19,14 +22,14 @@ def process_message(lambda_client, message):
   FailureLambda = body_params['FailureLambda']
   MaxRetries = body_params['MaxRetries']
   SQSQueueUrl = body_params['SQSQueueUrl']
-  
+
   approximateRetryCount = int(message.get('Attributes',{}).get('ApproximateReceiveCount', MaxRetries))
   receipt = message['ReceiptHandle']
   message_body['body_params']['ReceiptHandle'] = receipt
-  
-  log.info('URL: {0}, TargetLambda: {1}, PollLambda: {2}, Retries: {3}, MaxRetries: {4}, Modified Body: {5}'
-          .format(SQSQueueUrl, TargetLambda, PollLambda, approximateRetryCount, MaxRetries, message_body))
-  
+
+  log.info('URL: {0}, TargetLambda: {1}, Retries: {2}, MaxRetries: {3}, Modified Body: {4}'
+          .format(SQSQueueUrl, TargetLambda, approximateRetryCount, MaxRetries, message_body))
+
   if approximateRetryCount < MaxRetries:
       log.info('trying to take the requested action')
       lambda_client.invoke_async(FunctionName=TargetLambda, InvokeArgs=json.dumps(message_body))
@@ -37,29 +40,30 @@ def process_message(lambda_client, message):
       log.info('Both the attempt and the subsequent cleanup attempt failed, giving up')
       lambda_client.invoke_async(FunctionName=FailureLambda, InvokeArgs=json.dumps(message_body))
 
-def process_queue(sqs_client, sqs_url, lambda_client):
+def process_queue(sqs_client, sqs_queue_url, lambda_client):
 
   try:
+    log.info('waiting for a message...')
     response = sqs_client.receive_message(QueueUrl=sqs_queue_url,
                                    AttributeNames=['SentTimestamp', 'ApproximateReceiveCount'],
                                    MaxNumberOfMessages=10,
-                                   WaitTimeSeconds=30)
+                                   WaitTimeSeconds=20)
     for message in response.get('Messages', []):
+      log.info(message)
       process_message(lambda_client, message)
   except Exception as e:
-    logging.info('SQS receive_message failed, {0}'.format(e))
+    log.info('SQS receive_message failed, {0}'.format(e))
     pass
 
 def main():
   stage_label = sys.argv[1]
-  lambda_name = sys.argv[2]
-  sqs_region = sys.argv[3]
-  account_id = sys.argv[4]
+  sqs_region = sys.argv[2]
+  account_id = sys.argv[3]
 
   sqs_client = boto3.client('sqs', region_name=sqs_region)
   lambda_client = boto3.client('lambda', region_name=sqs_region)
   sqs_queue_url = get_sqs_url(sqs_region, account_id, stage_label)
-  
+
   while(True):
     try:
       process_queue(sqs_client, sqs_queue_url, lambda_client)
@@ -68,5 +72,4 @@ def main():
 
 if __name__ == '__main__':
   sys.exit(main())
-  
 
