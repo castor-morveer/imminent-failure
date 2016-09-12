@@ -26,6 +26,8 @@ def process_message(lambda_client, message):
   approximateRetryCount = int(message.get('Attributes',{}).get('ApproximateReceiveCount', MaxRetries))
   receipt = message['ReceiptHandle']
   message_body['body_params']['ReceiptHandle'] = receipt
+  message_body['body_params']['ApproximateRetriedCount'] = approximateRetryCount
+  message_body['body_params']['MaxRetries'] = MaxRetries
 
   log.info('URL: {0}, TargetLambda: {1}, Retries: {2}, MaxRetries: {3}, Modified Body: {4}'
           .format(SQSQueueUrl, TargetLambda, approximateRetryCount, MaxRetries, message_body))
