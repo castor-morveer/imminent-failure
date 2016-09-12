@@ -20,6 +20,7 @@ def process_message(lambda_client, message):
   TargetLambda = body_params['TargetLambda']
   UndoLambda = body_params['UndoLambda']
   FailureLambda = body_params['FailureLambda']
+  PollerInvokeLambda = body_params.get('PollerInvokeLambda')
   MaxRetries = body_params['MaxRetries']
   SQSQueueUrl = body_params['SQSQueueUrl']
 
@@ -33,15 +34,26 @@ def process_message(lambda_client, message):
           .format(SQSQueueUrl, TargetLambda, approximateRetryCount, MaxRetries, message_body))
 
   if approximateRetryCount < MaxRetries:
-      log.info('trying to take the requested action')
-      #lambda_client.invoke_async(FunctionName=TargetLambda, InvokeArgs=json.dumps(message_body))
-      lambda_client.invoke_async(FunctionName='test_invoke_test123', InvokeArgs=json.dumps(message_body))
-  #elif UndoLambda and (approximateRetryCount < (MaxRetries * 2)):
-  #    log.info('trying to undo the requested action')
-  #    lambda_client.invoke_async(FunctionName=UndoLambda, InvokeArgs=json.dumps(message_body))
-  #else:
-  #    log.info('Both the attempt and the subsequent cleanup attempt failed, giving up')
-  #    lambda_client.invoke_async(FunctionName=FailureLambda, InvokeArgs=json.dumps(message_body))
+    log.info('trying to take the requested action')
+    if PollerInvokeLambda:
+      message_body['body_params']['LambdaToCall'] = TargetLambda
+      lambda_client.invoke_async(FunctionName=PollerInvokeLambda, InvokeArgs=json.dumps(message_body))
+    else:  
+      lambda_client.invoke_async(FunctionName=TargetLambda, InvokeArgs=json.dumps(message_body))
+  elif UndoLambda and (approximateRetryCount < (MaxRetries * 2)):
+      log.info('trying to undo the requested action')
+      if PollerInvokeLambda:
+        message_body['body_params']['LambdaToCall'] = UndoLambda
+        lambda_client.invoke_async(FunctionName=PollerInvokeLambda, InvokeArgs=json.dumps(message_body))
+      else:
+        lambda_client.invoke_async(FunctionName=UndoLambda, InvokeArgs=json.dumps(message_body))
+  else:
+      log.info('Both the attempt and the subsequent cleanup attempt failed, giving up')
+      if PollerInvokeLambda:
+        message_body['body_params']['LambdaToCall'] = FailureLambda
+        lambda_client.invoke_async(FunctionName=PollerInvokeLambda, InvokeArgs=json.dumps(message_body))
+      else:
+        lambda_client.invoke_async(FunctionName=FailureLambda, InvokeArgs=json.dumps(message_body))
 
 def process_queue(sqs_client, sqs_queue_url, lambda_client):
 
