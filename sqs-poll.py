@@ -34,13 +34,14 @@ def process_message(lambda_client, message):
 
   if approximateRetryCount < MaxRetries:
       log.info('trying to take the requested action')
-      lambda_client.invoke_async(FunctionName=TargetLambda, InvokeArgs=json.dumps(message_body))
-  elif UndoLambda and (approximateRetryCount < (MaxRetries * 2)):
-      log.info('trying to undo the requested action')
-      lambda_client.invoke_async(FunctionName=UndoLambda, InvokeArgs=json.dumps(message_body))
-  else:
-      log.info('Both the attempt and the subsequent cleanup attempt failed, giving up')
-      lambda_client.invoke_async(FunctionName=FailureLambda, InvokeArgs=json.dumps(message_body))
+      #lambda_client.invoke_async(FunctionName=TargetLambda, InvokeArgs=json.dumps(message_body))
+      lambda_client.invoke_async(FunctionName='test_invoke_test123', InvokeArgs=json.dumps(message_body))
+  #elif UndoLambda and (approximateRetryCount < (MaxRetries * 2)):
+  #    log.info('trying to undo the requested action')
+  #    lambda_client.invoke_async(FunctionName=UndoLambda, InvokeArgs=json.dumps(message_body))
+  #else:
+  #    log.info('Both the attempt and the subsequent cleanup attempt failed, giving up')
+  #    lambda_client.invoke_async(FunctionName=FailureLambda, InvokeArgs=json.dumps(message_body))
 
 def process_queue(sqs_client, sqs_queue_url, lambda_client):
 
