@@ -64,7 +64,8 @@ def process_queue(sqs_client, sqs_queue_url, lambda_client):
                                    MaxNumberOfMessages=10,
                                    WaitTimeSeconds=20)
     for message in response.get('Messages', []):
-      log.info(message)
+      log.info('A message was received. To see the contents, enable DEBUG logging')
+      log.debug(message)
       process_message(lambda_client, message)
   except Exception as e:
     log.info('SQS receive_message failed, {0}'.format(e))
@@ -74,6 +75,9 @@ def main():
   stage_label = sys.argv[1]
   sqs_region = sys.argv[2]
   account_id = sys.argv[3]
+
+  if len(sys.argv) == 5:
+    log.setLevel(logging.DEBUG)
 
   sqs_client = boto3.client('sqs', region_name=sqs_region)
   lambda_client = boto3.client('lambda', region_name=sqs_region)
